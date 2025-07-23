@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="es" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Ventas y Cobranza v21</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- jsPDF y html2canvas para exportar a PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        .sidebar { transition: transform 0.3s ease-in-out; }
+        .sidebar-link { display: flex; align-items: center; padding: 0.75rem 1rem; border-radius: 0.5rem; font-weight: 500; transition: all 0.2s; }
+        .sidebar-link:hover, .sidebar-link.active { background-color: #3b82f6; color: white; }
+        .sidebar-link.active svg, .sidebar-link:hover svg { color: white; }
+        .sidebar-link svg { margin-right: 0.75rem; color: #64748b; transition: color 0.2s; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .dark .card { background-color: #1e293b; }
+        .modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; overflow-y: auto; padding: 1rem; }
+        .modal-content { max-height: 90vh; overflow-y: auto; width: 100%; max-width: 500px; padding: 1.5rem; border-radius: 0.75rem;}
+        .btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.6rem 1.2rem; border-radius: 0.5rem; font-weight: 600; transition: background-color 0.2s; border: 1px solid transparent; }
+        .btn-primary { background-color: #3b82f6; color: white; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-danger { background-color: #ef4444; color: white; }
+        .btn-danger:hover { background-color: #dc2626; }
+        .btn-secondary { background-color: #e2e8f0; color: #1e293b; }
+        .btn-secondary:hover { background-color: #cbd5e1; }
+        .dark .btn-secondary { background-color: #475569; color: #e2e8f0; }
+        .dark .btn-secondary:hover { background-color: #64748b; }
+        .btn-disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .table-cell { padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; }
+        .dark .table-cell { border-color: #374151; }
+        .table-header { font-weight: 600; color: #4b5563; background-color: #f9fafb; }
+        /* Toggle Switch Styles */
+        .toggle-checkbox:checked { right: 0; border-color: #3b82f6; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #3b82f6; }
+    </style>
+    <script>
+        // Aplica el tema oscuro al instante para evitar parpadeo (flickering)
+        if (localStorage.getItem('crediAppTheme') === 'dark' || (!('crediAppTheme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900">
+
+    <div class="flex h-screen overflow-hidden">
+        <!-- Barra Lateral (Sidebar) -->
+        <aside id="sidebar" class="sidebar bg-white dark:bg-slate-800 w-64 p-4 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 flex flex-col fixed inset-y-0 left-0 z-40 transform -translate-x-full md:relative md:translate-x-0">
+            <div class="flex items-center mb-8 flex-shrink-0">
+                <div class="bg-blue-500 text-white p-2 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+                <h1 class="text-xl font-bold ml-3 text-slate-800 dark:text-slate-200">CrediApp</h1>
+            </div>
+            <!-- Contenedor de Navegación con Scroll -->
+            <nav id="sidebar-nav" class="space-y-2 flex-grow overflow-y-auto">
+                <a href="#dashboard" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Dashboard</a>
+                <a href="#cobros-hoy" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"/><path d="M7 15h.01"/><path d="M12 15h.01"/><path d="M17 15h.01"/></svg>Cobros de Hoy</a>
+                <a href="#cierre-caja" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>Cierre de Caja</a>
+                <a href="#clientes" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>Clientes</a>
+                <a href="#recaudo-diario" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Recaudo Diario</a>
+                <a href="#ventas" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Ventas</a>
+                <a href="#ingresos" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>Ingresos</a>
+                <a href="#gastos" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>Gastos</a>
+                <a href="#reportes" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18.7 8a2 2 0 0 1 0 2.8l-6 6-4-4-4 4"/></svg>Reportes</a>
+                <a href="#patrimonio" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>Patrimonio</a>
+                <a href="#calculadora" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h10"/><path d="M10 7v10"/><path d="M16 12H8"/><path d="M12 16v-4"/></svg>Calculadora</a>
+                <a href="#ajustes" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Ajustes</a>
+                <a href="#backup" class="sidebar-link text-slate-600 dark:text-slate-400"><svg class="text-slate-500" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Respaldo</a>
+            </nav>
+        </aside>
+
+        <!-- Contenedor Principal -->
+        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <!-- Cabecera -->
+            <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4 flex justify-between items-center sticky top-0 z-20 flex-shrink-0">
+                <button id="menu-toggle-btn" class="text-slate-600 dark:text-slate-300 md:hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <div class="flex items-center gap-4">
+                    <h1 id="page-title" class="text-xl font-bold text-slate-800 dark:text-slate-200"></h1>
+                    <div id="profile-switcher-container"></div>
+                </div>
+                <div id="clock" class="text-sm text-slate-600 dark:text-slate-400 font-medium text-right"></div>
+            </header>
+            <!-- Área de Contenido con Scroll Interno -->
+            <main id="main-content" class="flex-1 p-4 md:p-8 overflow-y-auto"></main>
+        </div>
+    </div>
+    
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden md:hidden"></div>
+    <div id="form-modal" class="modal-backdrop hidden"><div class="modal-content bg-white dark:bg-slate-800"><div class="flex justify-between items-center mb-6"><h3 id="modal-title" class="text-2xl font-bold text-slate-800 dark:text-slate-200"></h3><button id="close-modal-btn" class="text-gray-500 dark:text-gray-400 text-2xl font-bold hover:text-gray-800 dark:hover:text-gray-200">&times;</button></div><form id="modal-form"></form></div></div>
+    <div id="alert-modal" class="modal-backdrop hidden"><div class="modal-content bg-white dark:bg-slate-800"><h3 id="alert-title" class="text-xl font-bold text-slate-800 dark:text-slate-200 mb-4"></h3><p id="alert-message" class="mb-6 text-slate-600 dark:text-slate-400"></p><div id="alert-buttons" class="flex justify-end gap-4"></div></div></div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const emptyProfile = { clientes: [], prestamos: [], transacciones: [], patrimonio: { cop: 0, crypto: 0 }, cierres: {} };
+        let state = {
+            profiles: { 'Principal': JSON.parse(JSON.stringify(emptyProfile)) },
+            activeProfile: 'Principal',
+            rates: {},
+        };
+
+        const mainContent = document.getElementById('main-content');
+        const pageTitle = document.getElementById('page-title');
+        const { jsPDF } = window.jspdf;
+        const formModal = document.getElementById('form-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalForm = document.getElementById('modal-form');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const alertModal = document.getElementById('alert-modal');
+        const alertTitle = document.getElementById('alert-title');
+        const alertMessage = document.getElementById('alert-message');
+        const alertButtons = document.getElementById('alert-buttons');
+        const sidebar = document.getElementById('sidebar');
+        const menuToggleBtn = document.getElementById('menu-toggle-btn');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+        const formatCurrency = (amount, currency = 'BRL') => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount || 0);
+        
+        const todayISO = () => {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const day = now.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+        
+        function getActiveProfileData() {
+            if (!state.profiles[state.activeProfile]) {
+                state.activeProfile = Object.keys(state.profiles)[0] || 'Principal';
+                if (!state.profiles[state.activeProfile]) {
+                     state.profiles[state.activeProfile] = JSON.parse(JSON.stringify(emptyProfile));
+                }
+            }
+            return state.profiles[state.activeProfile];
+        }
+
+        const routes = {
+            '#dashboard': { renderer: renderDashboard, title: 'Dashboard' },
+            '#cobros-hoy': { renderer: renderCobrosHoyPage, title: 'Cobros de Hoy' },
+            '#cierre-caja': { renderer: renderCierreDeCajaPage, title: 'Cierre de Caja' },
+            '#clientes': { renderer: renderClientesList, title: 'Clientes' },
+            '#recaudo-diario': { renderer: renderRecaudoDiario, title: 'Recaudo Diario' },
+            '#ventas': { renderer: renderVentasList, title: 'Ventas' },
+            '#ingresos': { renderer: () => renderTransaccionesList('ingreso'), title: 'Ingresos' },
+            '#gastos': { renderer: () => renderTransaccionesList('gasto'), title: 'Gastos' },
+            '#reportes': { renderer: renderReportesPage, title: 'Reportes' },
+            '#patrimonio': { renderer: renderPatrimonioPage, title: 'Patrimonio' },
+            '#calculadora': { renderer: renderCalculadoraPage, title: 'Calculadora' },
+            '#ajustes': { renderer: renderAjustesPage, title: 'Ajustes' },
+            '#backup': { renderer: renderBackupPage, title: 'Respaldo' },
+            '#cliente-detalle': { renderer: renderClienteDetalle, title: 'Detalle del Cliente' },
+        };
+
+        function navigate() {
+            const hash = window.location.hash || '#dashboard';
+            const [path, id] = hash.split('/');
+            const route = routes[path] || routes['#dashboard'];
+            mainContent.innerHTML = '';
+            pageTitle.textContent = route.title;
+            renderProfileSwitcher();
+            route.renderer(id);
+            document.querySelectorAll('.sidebar-link').forEach(l => {
+                l.classList.toggle('active', l.getAttribute('href') === path);
+            });
+            sidebar.classList.add('-translate-x-full');
+            sidebarOverlay.classList.add('hidden');
+        }
+
+        const STORAGE_KEY = 'crediAppState_v21_BRL'; 
+
+        function migrateData() {
+            if (localStorage.getItem(STORAGE_KEY)) return;
+            const oldKeys = ['crediAppState_v20_BRL', 'crediAppState_v19_BRL', 'crediAppState_v18_BRL', 'crediAppState_v17_BRL', 'crediAppState_v16_BRL', 'crediAppState_v15_BRL', 'crediAppState_v14_BRL', 'crediAppState_v13_BRL', 'crediAppState_v12', 'crediAppState_v11', 'crediAppV10State', 'crediAppV9State', 'crediAppV8State', 'crediAppV7State', 'crediAppV6State', 'crediAppV5State'];
+            for (const oldKey of oldKeys) {
+                const oldData = localStorage.getItem(oldKey);
+                if (oldData) {
+                    const parsedOldData = JSON.parse(oldData);
+                    if(parsedOldData.clientes) { // It's a pre-profile structure
+                        const migratedState = {
+                            profiles: {
+                                'Principal': {
+                                    clientes: parsedOldData.clientes || [],
+                                    prestamos: parsedOldData.prestamos || [],
+                                    transacciones: parsedOldData.transacciones || [],
+                                    patrimonio: parsedOldData.patrimonio || { cop: 0, crypto: 0 },
+                                    cierres: parsedOldData.cierres || {}
+                                }
+                            },
+                            activeProfile: 'Principal',
+                            rates: parsedOldData.rates || {},
+                        };
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedState));
+                        return;
+                    }
+                }
+            }
+        }
+
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        function loadState() {
+            migrateData();
+            const savedState = localStorage.getItem(STORAGE_KEY);
+            if (savedState) {
+                const loaded = JSON.parse(savedState);
+                 state = { ...state, ...loaded };
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+            document.getElementById('clock').textContent = now.toLocaleDateString('es-ES', options);
+        }
+
+        const calculateEfectivoEnCaja = (targetDate, profileData) => {
+            const ingresosCapital = profileData.transacciones
+                .filter(t => t.tipo === 'ingreso' && t.fecha <= targetDate)
+                .reduce((sum, t) => sum + t.monto, 0);
+            const totalVendido = profileData.prestamos
+                .filter(p => p.fecha <= targetDate)
+                .reduce((sum, p) => sum + p.monto, 0);
+            const gastosOperativos = profileData.transacciones
+                .filter(t => t.tipo === 'gasto' && t.fecha <= targetDate)
+                .reduce((sum, t) => sum + t.monto, 0);
+            const totalRecaudadoHistorico = profileData.prestamos
+                .flatMap(p => p.pagos.filter(pago => pago.fecha <= targetDate))
+                .reduce((sum, pago) => sum + pago.monto, 0);
+            
+            return (totalRecaudadoHistorico + ingresosCapital) - (totalVendido + gastosOperativos);
+        };
+
+        async function renderDashboard() {
+            const profileData = getActiveProfileData();
+            const hoy = todayISO();
+            const recaudoHoy = profileData.prestamos.flatMap(p => p.pagos).filter(pago => pago.fecha === hoy).reduce((sum, pago) => sum + pago.monto, 0);
+            
+            const recaudoEsperadoHoy = profileData.prestamos.filter(p => p.status === 'Activo').reduce((sum, p) => sum + p.cuotaDiaria, 0);
+
+            const efectivoEnCaja = calculateEfectivoEnCaja(hoy, profileData);
+            const carteraActiva = profileData.prestamos.filter(p => p.status === 'Activo').reduce((sum, p) => sum + p.saldo, 0);
+            const activosTotales = efectivoEnCaja + carteraActiva;
+
+            const patrimonioCOP = profileData.patrimonio.cop || 0;
+            const patrimonioCrypto = profileData.patrimonio.crypto || 0;
+            const totalPatrimonioBRL = (patrimonioCOP * (state.rates.cop_brl || 0)) + (patrimonioCrypto * (state.rates.usdt_brl || 0));
+            
+            mainContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                <div class="card p-6 lg:col-span-3 bg-blue-600 text-white shadow-lg"><h3 class="text-blue-200 text-lg font-medium">Activos del Negocio (Caja + Cartera)</h3><p class="text-5xl font-bold mt-2">${formatCurrency(activosTotales)}</p></div>
+                <div class="card p-6 lg:col-span-2 bg-purple-600 text-white shadow-lg"><h3 class="text-purple-200 text-lg font-medium">Patrimonio Externo</h3><p class="text-5xl font-bold mt-2">${formatCurrency(totalPatrimonioBRL)}</p></div>
+                
+                <div class="card p-6 bg-green-600 text-white shadow-lg"><h3 class="text-green-200 text-lg font-medium">Recaudo de Hoy</h3><p class="text-3xl font-bold mt-2">${formatCurrency(recaudoHoy)}</p></div>
+                <div class="card p-6 bg-amber-500 text-white shadow-lg"><h3 class="text-amber-200 text-lg font-medium">Recaudo Esperado Hoy</h3><p class="text-3xl font-bold mt-2">${formatCurrency(recaudoEsperadoHoy)}</p></div>
+                <div class="card p-6"><h3 class="text-slate-500 dark:text-slate-400">Efectivo en Caja</h3><p class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">${formatCurrency(efectivoEnCaja)}</p></div>
+                <div class="card p-6"><h3 class="text-slate-500 dark:text-slate-400">Cartera Activa</h3><p class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">${formatCurrency(carteraActiva)}</p></div>
+                
+                <div class="card p-6 md:col-span-2 lg:col-span-5"><h3 class="text-xl font-bold mb-4 text-slate-800 dark:text-slate-200">Tendencia de Ventas vs. Recaudo (Últimos 30 días)</h3><canvas id="recaudoTrendChart"></canvas></div>
+            </div>`;
+            renderRecaudoTrendChart();
+        }
+        
+        function renderReportesPage() {
+            const profileData = getActiveProfileData();
+            const groupedData = {};
+
+            profileData.prestamos.forEach(p => {
+                const month = p.fecha.substring(0, 7);
+                if (!groupedData[month]) groupedData[month] = { vendido: 0, recaudado: 0, ingresosCapital: 0, gastos: 0 };
+                groupedData[month].vendido += p.monto;
+            });
+            profileData.prestamos.flatMap(p => p.pagos).forEach(pago => {
+                const month = pago.fecha.substring(0, 7);
+                if (!groupedData[month]) groupedData[month] = { vendido: 0, recaudado: 0, ingresosCapital: 0, gastos: 0 };
+                groupedData[month].recaudado += pago.monto;
+            });
+            profileData.transacciones.forEach(t => {
+                const month = t.fecha.substring(0, 7);
+                if (!groupedData[month]) groupedData[month] = { vendido: 0, recaudado: 0, ingresosCapital: 0, gastos: 0 };
+                if (t.tipo === 'ingreso') {
+                    groupedData[month].ingresosCapital += t.monto;
+                } else if (t.tipo === 'gasto') {
+                    groupedData[month].gastos += t.monto;
+                }
+            });
+
+            const sortedMonths = Object.keys(groupedData).sort().reverse();
+
+            let contentHTML = sortedMonths.map(month => {
+                const data = groupedData[month];
+                const monthDate = new Date(month + '-02');
+                const monthName = monthDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+
+                return `
+                    <div class="card mb-6">
+                        <h3 class="text-xl font-bold p-4 border-b dark:border-slate-700">${monthName}</h3>
+                        <div class="p-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><h3 class="text-slate-500 dark:text-slate-400 text-sm">Total Vendido</h3><p class="text-2xl font-bold text-blue-600 dark:text-blue-400">${formatCurrency(data.vendido)}</p></div>
+                            <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><h3 class="text-slate-500 dark:text-slate-400 text-sm">Total Recaudado</h3><p class="text-2xl font-bold text-green-600">${formatCurrency(data.recaudado)}</p></div>
+                            <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><h3 class="text-slate-500 dark:text-slate-400 text-sm">Ingresos (Capital)</h3><p class="text-2xl font-bold text-green-500">${formatCurrency(data.ingresosCapital)}</p></div>
+                            <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><h3 class="text-slate-500 dark:text-slate-400 text-sm">Gastos Operativos</h3><p class="text-2xl font-bold text-red-500">${formatCurrency(data.gastos)}</p></div>
+                        </div>
+                    </div>`;
+            }).join('');
+
+            mainContent.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold text-slate-800 dark:text-slate-200">Reportes Mensuales</h2>
+                </div>
+                <div>
+                    ${contentHTML || '<div class="card p-8 text-center text-slate-500 dark:text-slate-400">No hay datos para generar reportes.</div>'}
+                </div>`;
+        }
+
+
+        function renderRecaudoDiario() {
+            const profileData = getActiveProfileData();
+            const pagosPorFecha = profileData.prestamos.flatMap(p => p.pagos.map(pago => ({ ...pago, cliente: profileData.clientes.find(c => c.id === p.clienteId)?.nombre || 'N/A' }))).reduce((acc, pago) => { if (!acc[pago.fecha]) acc[pago.fecha] = { total: 0, pagos: [] }; acc[pago.fecha].total += pago.monto; acc[pago.fecha].pagos.push(pago); return acc; }, {});
+            const fechasOrdenadas = Object.keys(pagosPorFecha).sort((a, b) => new Date(b) - new Date(a));
+            let contentHTML = fechasOrdenadas.map(fecha => {
+                const dia = pagosPorFecha[fecha];
+                let pagosDetalleHTML = dia.pagos.map(p => `<div class="flex justify-between py-1 text-sm text-slate-700 dark:text-slate-300"><span>${p.cliente}</span><span class="font-medium">${formatCurrency(p.monto)}</span></div>`).join('');
+                return `<div class="card p-4 mb-4"><div class="flex justify-between items-center border-b dark:border-slate-700 pb-2 mb-2"><h3 class="font-bold text-lg text-slate-800 dark:text-slate-200">${new Date(fecha + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3><p class="font-bold text-lg text-green-600">${formatCurrency(dia.total)}</p></div><div>${pagosDetalleHTML}</div></div>`;
+            }).join('');
+            mainContent.innerHTML = `<div class="flex justify-between items-center mb-6"><h2 class="text-3xl font-bold text-slate-800 dark:text-slate-200">Recaudo Diario</h2><button id="export-pdf-btn" class="btn btn-primary">Exportar a PDF</button></div><div id="recaudo-content">${contentHTML || '<div class="card p-8 text-center text-slate-500 dark:text-slate-400">No hay recaudos registrados.</div>'}</div>`;
+            document.getElementById('export-pdf-btn').addEventListener('click', () => exportToPDF('recaudo-content', 'Recaudo_Diario_CrediApp'));
+        }
+
+        function renderClientesList() {
+            mainContent.innerHTML = `<div class="flex justify-between items-center mb-6"><h2 class="text-3xl font-bold text-slate-800 dark:text-slate-200">Clientes</h2><button id="add-cliente-btn" class="btn btn-primary">Añadir Cliente</button></div><div class="card p-0"><table class="w-full text-left text-sm"><thead class="table-header dark:bg-slate-700 dark:text-slate-300"><tr><th class="table-cell">Cliente</th><th class="table-cell">Info. de Deuda</th><th class="table-cell">Acciones</th></tr></thead><tbody id="clientes-tbody" class="dark:text-slate-300"></tbody></table></div>`;
+            renderClientRows();
+            document.getElementById('add-cliente-btn').addEventListener('click', () => openClienteModal());
+            mainContent.addEventListener('click', e => {
+                if (e.target.classList.contains('delete-cliente-btn')) {
+                    deleteCliente(e.target.dataset.id);
+                }
+            });
+        }
+        
+        function renderClientRows() {
+            const tbody = document.getElementById('clientes-tbody');
+            const profileData = getActiveProfileData();
+            const hoy = todayISO();
+            
+            const sortedClients = [...profileData.clientes].sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+            let tableRows = sortedClients.map((cliente, index) => {
+                const ventasActivas = profileData.prestamos.filter(p => p.clienteId === cliente.id && p.status === 'Activo');
+                const totalVendido = ventasActivas.reduce((sum, v) => sum + v.monto, 0);
+                const totalSaldo = ventasActivas.reduce((sum, v) => sum + v.saldo, 0);
+                const totalCuota = ventasActivas.reduce((sum, v) => sum + v.cuotaDiaria, 0);
+                const cuotasRestantes = totalCuota > 0 ? Math.ceil(totalSaldo / totalCuota) : 0;
+                
+                const pagoHoy = ventasActivas.some(v => v.pagos.some(p => p.fecha === hoy));
+                const estadoHoyIcon = totalSaldo > 0 
+                    ? (pagoHoy 
+                        ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-green-500"><path d="M20 6 9 17l-5-5"/></svg>` 
+                        : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-red-500"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`)
+                    : '';
+
+                return `
+                <tr class="odd:bg-white even:bg-slate-50 dark:odd:bg-slate-800 dark:even:bg-slate-700/50">
+                    <td class="table-cell">
+                        <div class="font-medium text-slate-800 dark:text-slate-200 flex items-center"><span class="text-xs text-slate-400 mr-2">${index + 1}.</span>${cliente.nombre}</div>
+                        <div class="text-slate-500 dark:text-slate-400 ml-5">${cliente.ruta || 'Sin Ruta'}</div>
+                    </td>
+                    <td class="table-cell text-xs">
+                        ${totalSaldo > 0 ? `
+                        <div class="flex flex-wrap gap-x-3 gap-y-1">
+                            <span><span class="text-slate-500">Vendido:</span> ${formatCurrency(totalVendido)}</span>
+                            <span><span class="text-slate-500">Cuotas:</span> ${cuotasRestantes}</span>
+                            <span class="font-bold text-red-500"><span class="text-slate-500 font-normal">Saldo:</span> ${formatCurrency(totalSaldo)}</span>
+                        </div>
+                        ` : '<span class="text-slate-500 dark:text-slate-400">Sin deuda activa</span>'}
+                    </td>
+                    <td class="table-cell">
+                        <div class="flex items-center gap-4">
+                            ${estadoHoyIcon}
+                            <a href="#cliente-detalle/${cliente.id}" class="text-blue-600 hover:underline text-xs">Ver/Editar</a>
+                            <button data-id="${cliente.id}" class="delete-cliente-btn text-red-500 hover:underline text-xs">Eliminar</button>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+            tbody.innerHTML = tableRows || '<tr><td colspan="3" class="text-center py-8">No hay clientes.</td></tr>';
+        }
+
+        function renderCalculadoraPage() {
+            mainContent.innerHTML = `<div class="grid md:grid-cols-2 gap-8"><div class="card p-6"><form id="calc-form" class="space-y-4"><div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Monto de la Venta</label><input type="number" id="calc-monto" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div><div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Interés (%)</label><input type="number" id="calc-interes" value="20" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div><div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Plazo (días)</label><input type="number" id="calc-plazo" value="30" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div></form></div><div id="calc-results" class="card p-6 bg-slate-50 dark:bg-slate-700 space-y-4"><h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Resultados</h3><div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Monto Total a Pagar:</span><span id="calc-total" class="font-bold text-lg text-blue-600">${formatCurrency(0)}</span></div><div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Cuota Diaria Sugerida:</span><span id="calc-cuota" class="font-bold text-lg text-green-600">${formatCurrency(0)}</span></div></div></div>`;
+            const form = document.getElementById('calc-form');
+            form.addEventListener('input', () => {
+                const monto = parseFloat(document.getElementById('calc-monto').value) || 0;
+                const interes = parseFloat(document.getElementById('calc-interes').value) || 0;
+                const plazo = parseInt(document.getElementById('calc-plazo').value) || 1;
+                const total = monto * (1 + (interes / 100));
+                const cuota = total / plazo;
+                document.getElementById('calc-total').textContent = formatCurrency(total);
+                document.getElementById('calc-cuota').textContent = formatCurrency(cuota);
+            });
+        }
+
+        function renderCobrosHoyPage() {
+            const hoy = todayISO();
+            const profileData = getActiveProfileData();
+            
+            mainContent.innerHTML = `<div class="card p-0"><table class="w-full text-left text-sm"><thead class="table-header dark:bg-slate-700 dark:text-slate-300"><tr><th class="table-cell">Cliente</th><th class="table-cell">Acción Rápida</th></tr></thead><tbody id="cobros-tbody" class="dark:text-slate-300"></tbody></table></div>`;
+
+            const renderTable = () => {
+                let cobros = profileData.prestamos.filter(p => {
+                    if (p.status !== 'Activo') return false;
+                    const pagoHoy = p.pagos.some(pago => pago.fecha === hoy);
+                    const attemptToday = (p.noPagos || []).some(np => np.fecha === hoy);
+                    return !pagoHoy && !attemptToday;
+                });
+                
+                cobros.sort((a, b) => {
+                    const clienteA = profileData.clientes.find(c => c.id === a.clienteId);
+                    const clienteB = profileData.clientes.find(c => c.id === b.clienteId);
+                    if (!clienteA || !clienteB) return 0;
+                    return clienteA.nombre.localeCompare(clienteB.nombre);
+                });
+
+                let rowsHTML = cobros.map((p, index) => {
+                    const cliente = profileData.clientes.find(c => c.id === p.clienteId);
+                    const cuotasRestantes = p.cuotaDiaria > 0 ? Math.ceil(p.saldo / p.cuotaDiaria) : 0;
+                    return `<tr class="odd:bg-white even:bg-slate-50 dark:odd:bg-slate-800 dark:even:bg-slate-700/50">
+                        <td class="table-cell">
+                            <p class="font-medium text-slate-800 dark:text-slate-200 flex items-center"><span class="text-xs text-slate-400 mr-2">${index + 1}.</span>${cliente?.nombre || 'N/A'}</p>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap gap-x-3 ml-5">
+                                <span>V: ${formatCurrency(p.monto)}</span>
+                                <span>C: ${cuotasRestantes}</span>
+                                <span class="font-bold text-red-500">S: ${formatCurrency(p.saldo)}</span>
+                            </div>
+                        </td>
+                        <td class="table-cell">
+                            <form class="quick-pay-form flex flex-col sm:flex-row items-stretch sm:items-center gap-2" data-prestamo-id="${p.id}">
+                                <input type="number" name="monto" value="${Math.round(p.cuotaDiaria)}" step="1" required class="w-full sm:w-24 p-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white text-sm">
+                                <div class="flex gap-2">
+                                    <button type="submit" class="btn btn-primary text-xs px-2 py-1 flex-1">Pagar</button>
+                                    <button type="button" class="no-pago-btn btn btn-danger text-xs px-2 py-1 flex-1" data-prestamo-id="${p.id}">No Pagó</button>
+                                </div>
+                                <a href="#cliente-detalle/${p.clienteId}" class="text-blue-600 hover:underline text-xs text-center sm:ml-2">Detalle</a>
+                            </form>
+                        </td>
+                    </tr>`;
+                }).join('');
+
+                document.getElementById('cobros-tbody').innerHTML = rowsHTML || '<tr><td colspan="2" class="text-center py-8 text-slate-500 dark:text-slate-400">¡Felicidades! No hay cobros pendientes para hoy.</td></tr>';
+
+                document.querySelectorAll('.quick-pay-form').forEach(form => {
+                    form.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        const prestamoId = e.target.dataset.prestamoId;
+                        const monto = parseFloat(e.target.elements.monto.value);
+                        if (prestamoId && monto > 0) {
+                            addPago(prestamoId, monto, todayISO());
+                        }
+                    });
+                });
+
+                document.querySelectorAll('.no-pago-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const prestamoId = e.target.dataset.prestamoId;
+                        markAsNoPay(prestamoId);
+                    });
+                });
+            };
+            
+            renderTable();
+        }
+        
+        function renderVentasList() {
+            const profileData = getActiveProfileData();
+
+            // 1. Group sales by month, and then by day
+            const ventasPorMes = profileData.prestamos.reduce((acc, venta) => {
+                const month = venta.fecha.substring(0, 7); // YYYY-MM
+                const fecha = venta.fecha;
+
+                if (!acc[month]) {
+                    acc[month] = {};
+                }
+                if (!acc[month][fecha]) {
+                    acc[month][fecha] = { totalVendido: 0, ganancia: 0 };
+                }
+
+                acc[month][fecha].totalVendido += venta.monto;
+                acc[month][fecha].ganancia += (venta.montoTotal - venta.monto);
+                return acc;
+            }, {});
+
+            // 2. Get sorted months (most recent first)
+            const sortedMonths = Object.keys(ventasPorMes).sort().reverse();
+
+            // 3. Generate HTML for each month
+            let contentHTML = sortedMonths.map(month => {
+                const monthDate = new Date(month + '-02'); // Use day 2 to avoid timezone issues
+                const monthName = monthDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+                const diasDelMes = ventasPorMes[month];
+                const sortedDays = Object.keys(diasDelMes).sort((a, b) => new Date(b) - new Date(a));
+
+                let tableRows = sortedDays.map(fecha => {
+                    const dia = diasDelMes[fecha];
+                    return `
+                        <tr class="odd:bg-white even:bg-slate-50 dark:odd:bg-slate-800 dark:even:bg-slate-700/50">
+                            <td class="table-cell">${fecha}</td>
+                            <td class="table-cell">${formatCurrency(dia.totalVendido)}</td>
+                            <td class="table-cell text-green-600 font-medium">${formatCurrency(dia.ganancia)}</td>
+                        </tr>`;
+                }).join('');
+
+                return `
+                    <div class="card mb-6">
+                        <h3 class="text-xl font-bold p-4 border-b dark:border-slate-700">${monthName}</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead class="table-header dark:bg-slate-700 dark:text-slate-300">
+                                    <tr>
+                                        <th class="table-cell">Fecha</th>
+                                        <th class="table-cell">Total Vendido</th>
+                                        <th class="table-cell">Ganancia (Interés)</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="dark:text-slate-300">${tableRows}</tbody>
+                            </table>
+                        </div>
+                    </div>`;
+            }).join('');
+
+            // 4. Render the final HTML
+            mainContent.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold text-slate-800 dark:text-slate-200">Resumen de Ventas</h2>
+                    <button id="add-prestamo-btn" class="btn btn-primary">Nueva Venta</button>
+                </div>
+                <div>
+                    ${contentHTML || `<div class="card p-8 text-center text-slate-500 dark:text-slate-400">No hay ventas registradas.</div>`}
+                </div>`;
+
+            document.getElementById('add-prestamo-btn').addEventListener('click', () => openPrestamoModal());
+        }
+
+        function renderTransaccionesList(type) {
+            const profileData = getActiveProfileData();
+            const title = type === 'ingreso' ? 'Ingresos' : 'Gastos';
+            const transaccionesFiltradas = profileData.transacciones.filter(t => t.tipo === type);
+
+            const groupedByMonth = transaccionesFiltradas.reduce((acc, t) => {
+                const month = t.fecha.substring(0, 7); // YYYY-MM
+                if (!acc[month]) acc[month] = [];
+                acc[month].push(t);
+                return acc;
+            }, {});
+
+            const sortedMonths = Object.keys(groupedByMonth).sort().reverse();
+
+            let contentHTML = sortedMonths.map(month => {
+                const monthDate = new Date(month + '-02'); // Use day 2 to avoid timezone issues
+                const monthName = monthDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+                
+                let tableRows = groupedByMonth[month].map(t => `
+                    <tr class="${type === 'ingreso' ? 'bg-green-50 dark:bg-green-900/50' : 'bg-red-50 dark:bg-red-900/50'}">
+                        <td class="table-cell">${t.fecha}</td>
+                        <td class="table-cell">${t.descripcion}</td>
+                        <td class="table-cell font-medium">${formatCurrency(t.monto)}</td>
+                        <td class="table-cell space-x-2">
+                            <button class="edit-transaccion-btn text-yellow-500 hover:underline text-xs" data-id="${t.id}">Editar</button>
+                            <button class="delete-transaccion-btn text-red-500 hover:underline text-xs" data-id="${t.id}">Eliminar</button>
+                        </td>
+                    </tr>`).join('');
+
+                return `<div class="card mb-6">
+                    <h3 class="text-xl font-bold p-4 border-b dark:border-slate-700">${monthName}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="table-header dark:bg-slate-700 dark:text-slate-300">
+                                <tr><th class="table-cell">Fecha</th><th class="table-cell">Descripción</th><th class="table-cell">Monto</th><th class="table-cell">Acciones</th></tr>
+                            </thead>
+                            <tbody class="dark:text-slate-300">${tableRows}</tbody>
+                        </table>
+                    </div>
+                </div>`;
+            }).join('');
+
+            mainContent.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold text-slate-800 dark:text-slate-200">${title}</h2>
+                    <button id="add-transaccion-btn" class="btn btn-primary">Añadir ${type === 'ingreso' ? 'Ingreso' : 'Gasto'}</button>
+                </div>
+                <div id="transacciones-content">${contentHTML || `<div class="card p-8 text-center text-slate-500 dark:text-slate-400">No hay ${title.toLowerCase()} registrados.</div>`}</div>`;
+
+            document.getElementById('add-transaccion-btn').addEventListener('click', () => openTransaccionModal(null, type));
+            mainContent.addEventListener('click', (e) => {
+                if (e.target.classList.contains('edit-transaccion-btn')) {
+                    openTransaccionModal(e.target.dataset.id);
+                }
+                if (e.target.classList.contains('delete-transaccion-btn')) {
+                    deleteTransaccion(e.target.dataset.id);
+                }
+            });
+        }
+
+        function renderClienteDetalle(clienteId) {
+            const profileData = getActiveProfileData();
+            const cliente = profileData.clientes.find(c => c.id === clienteId);
+            if (!cliente) { window.location.hash = '#clientes'; return; }
+            const prestamosCliente = profileData.prestamos
+                .filter(p => p.clienteId === clienteId)
+                .sort((a, b) => {
+                    if (a.status === 'Activo' && b.status !== 'Activo') return -1;
+                    if (a.status !== 'Activo' && b.status === 'Activo') return 1;
+                    return new Date(b.fecha) - new Date(a.fecha);
+                });
+
+            const prestamosHTML = prestamosCliente.map(p => {
+                const pagosHTML = p.pagos.map(pago => `<li class="flex justify-between items-center py-2 border-b dark:border-slate-700"><div><p>${pago.fecha}</p></div><div class="font-medium text-green-600">${formatCurrency(pago.monto)}</div><div class="space-x-2"><button class="edit-pago-btn text-xs text-yellow-500 hover:underline" data-prestamo-id="${p.id}" data-pago-id="${pago.id}">Editar</button><button class="delete-pago-btn text-xs text-red-500 hover:underline" data-prestamo-id="${p.id}" data-pago-id="${pago.id}">Eliminar</button></div></li>`).join('');
+                const noPagosHTML = (p.noPagos || []).map(np => `<li class="py-2 border-b dark:border-slate-700 text-red-500">No pagó el día: ${np.fecha}</li>`).join('');
+                return `<div class="card p-6 mb-6">
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4 border-b dark:border-slate-700 pb-4 text-sm">
+                        <div><p class="text-slate-500 dark:text-slate-400">Fecha Venta</p><p class="font-bold">${p.fecha}</p></div>
+                        <div><p class="text-slate-500 dark:text-slate-400">Total a Pagar</p><p class="font-bold text-blue-600">${formatCurrency(p.montoTotal)}</p></div>
+                        <div><p class="text-slate-500 dark:text-slate-400">Cuota Diaria</p><p class="font-bold">${formatCurrency(p.cuotaDiaria)}</p></div>
+                        <div><p class="text-slate-500 dark:text-slate-400">Saldo</p><p class="font-bold text-red-600">${formatCurrency(p.saldo)}</p></div>
+                        <div><p class="text-slate-500 dark:text-slate-400">Estado</p><p class="font-bold">${p.status}</p></div>
+                    </div>
+                    <div class="grid md:grid-cols-3 gap-6">
+                        <div><h4 class="font-bold text-lg mb-2">Registrar Pago</h4><form class="registrar-pago-form" data-prestamo-id="${p.id}"><input type="date" name="fecha" value="${todayISO()}" required class="w-full p-2 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white mb-2"><input type="number" name="monto" placeholder="Monto" value="${Math.round(p.cuotaDiaria)}" step="1" required class="w-full p-2 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white mb-2"><button type="submit" class="btn btn-primary w-full ${p.status === 'Pagado' ? 'btn-disabled' : ''}" ${p.status === 'Pagado' ? 'disabled' : ''}>Abonar</button></form></div>
+                        <div><h4 class="font-bold text-lg mb-2">Historial de Pagos</h4><ul class="h-48 overflow-y-auto pr-2">${pagosHTML || '<li>No hay pagos.</li>'}</ul></div>
+                        <div><h4 class="font-bold text-lg mb-2">Historial de "No Pagos"</h4><ul class="h-48 overflow-y-auto pr-2">${noPagosHTML || '<li>Sin registros.</li>'}</ul></div>
+                    </div>
+                </div>`;
+            }).join('');
+            const mapHTML = cliente.direccion ? `<div class="card p-4"><h3 class="font-bold text-lg mb-2">Ubicación</h3><iframe width="100%" height="300" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="https://maps.google.com/maps?q=${encodeURIComponent(cliente.direccion)}&output=embed"></iframe></div>` : '';
+            const imageHTML = cliente.imagenUrl ? `<div class="card p-4"><h3 class="font-bold text-lg mb-2">Foto Guardada</h3><img src="${cliente.imagenUrl}" alt="Foto del cliente" class="rounded-lg w-full"></div>` : '';
+            mainContent.innerHTML = `<div class="mb-6"><a href="#clientes" class="text-blue-600 dark:text-blue-400 hover:underline">&larr; Volver</a><h2 class="text-3xl font-bold mt-2">${cliente.nombre}</h2></div><div class="grid lg:grid-cols-3 gap-6 mb-6"><div class="lg:col-span-2"><div class="card p-6"><h3 class="font-bold text-xl mb-4">Información del Cliente</h3><div class="space-y-2 text-slate-700 dark:text-slate-300"><p><strong>Ruta:</strong> ${cliente.ruta || 'N/A'}</p><p><strong>Documento:</strong> ${cliente.documento || 'N/A'}</p><p><strong>Teléfono:</strong> ${cliente.telefono || 'N/A'}</p><p><strong>Dirección:</strong> ${cliente.direccion || 'N/A'}</p></div></div></div><div class="space-y-6">${imageHTML}${mapHTML}</div></div><div><h3 class="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-4">Historial de Ventas</h3>${prestamosHTML || '<div class="card p-8 text-center">Este cliente no tiene ventas.</div>'}</div>`;
+            mainContent.addEventListener('click', (e) => {
+                if (e.target.matches('.edit-pago-btn')) {
+                    openPagoModal(e.target.dataset.prestamoId, e.target.dataset.pagoId);
+                }
+                if (e.target.matches('.delete-pago-btn')) {
+                    deletePago(e.target.dataset.prestamoId, e.target.dataset.pagoId);
+                }
+            });
+            document.querySelectorAll('.registrar-pago-form').forEach(form => form.addEventListener('submit', e => { e.preventDefault(); addPago(e.target.dataset.prestamoId, parseFloat(e.target.elements.monto.value), e.target.elements.fecha.value); }));
+        }
+        
+        async function renderPatrimonioPage() {
+            const profileData = getActiveProfileData();
+            mainContent.innerHTML = `<div id="patrimonio-content" class="text-center"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div><p class="mt-4 text-slate-500">Cargando tasas de cambio...</p></div>`;
+            
+            if (!state.rates || !state.rates.usdt_brl) {
+                state.rates = await fetchExchangeRates();
+            }
+            const rates = state.rates;
+
+            const patrimonioCOP_BRL = (profileData.patrimonio.cop || 0) * (rates.cop_brl || 0);
+            const patrimonioCrypto_BRL = (profileData.patrimonio.crypto || 0) * (rates.usdt_brl || 0);
+            const totalBRL = patrimonioCOP_BRL + patrimonioCrypto_BRL;
+            
+            document.getElementById('patrimonio-content').innerHTML = `<div class="grid md:grid-cols-2 gap-8">
+                <div class="card p-6">
+                    <h3 class="text-xl font-bold mb-4 text-slate-800 dark:text-slate-200">Mis Activos</h3>
+                    <form id="patrimonio-form" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Pesos Colombianos (COP)</label>
+                            <input type="number" name="cop" value="${profileData.patrimonio.cop || 0}" class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Criptomonedas (USDT)</label>
+                            <input type="number" name="crypto" value="${profileData.patrimonio.crypto || 0}" class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="submit" class="btn btn-primary">Guardar</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card p-6 bg-slate-50 dark:bg-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-slate-800 dark:text-slate-200">Resumen en Reales (BRL)</h3>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center text-sm"><span class="text-slate-500 dark:text-slate-400">Tasa COP a BRL:</span><span class="font-medium">${(rates.cop_brl || 0).toFixed(6)}</span></div>
+                        <div class="flex justify-between items-center text-sm"><span class="text-slate-500 dark:text-slate-400">Tasa USDT a BRL:</span><span class="font-medium">${(rates.usdt_brl || 0).toFixed(2)}</span></div>
+                        <hr class="my-2 dark:border-slate-600">
+                        <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-300">Total COP en BRL:</span><span class="font-bold">${formatCurrency(patrimonioCOP_BRL, 'BRL')}</span></div>
+                        <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-300">Total USDT en BRL:</span><span class="font-bold">${formatCurrency(patrimonioCrypto_BRL, 'BRL')}</span></div>
+                        <div class="flex justify-between items-center text-xl bg-purple-100 dark:bg-purple-900/50 p-3 rounded-lg">
+                            <span class="font-bold text-purple-800 dark:text-purple-300">Total Patrimonio:</span>
+                            <span class="font-bold text-purple-800 dark:text-purple-300">${formatCurrency(totalBRL, 'BRL')}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+            document.getElementById('patrimonio-form').addEventListener('submit', (e) => { e.preventDefault(); const formData = new FormData(e.target); getActiveProfileData().patrimonio.cop = parseFloat(formData.get('cop')) || 0; getActiveProfileData().patrimonio.crypto = parseFloat(formData.get('crypto')) || 0; updateApp(); showAlert('Guardado', 'Tu información de patrimonio ha sido actualizada.'); });
+        }
+
+        function renderBackupPage() {
+            mainContent.innerHTML = `<div class="grid md:grid-cols-2 gap-8"><div class="card p-6"><h3 class="text-xl font-bold mb-2">Exportar Datos</h3><p class="text-slate-600 dark:text-slate-400 mb-4">Guarda una copia de seguridad de toda tu información.</p><button id="export-btn" class="btn btn-primary">Descargar Respaldo</button></div><div class="card p-6"><h3 class="text-xl font-bold mb-2">Importar Datos</h3><p class="text-slate-600 dark:text-slate-400 mb-4">Restaura la información desde un archivo. ¡Cuidado! Esto reemplazará todos los datos actuales.</p><input type="file" id="import-file" accept=".json,application/json" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/></div></div>`;
+            document.getElementById('export-btn').addEventListener('click', exportData);
+            document.getElementById('import-file').addEventListener('change', importData);
+        }
+
+        function renderAjustesPage() {
+            const isDarkMode = document.documentElement.classList.contains('dark');
+            const profilesHTML = Object.keys(state.profiles).map(p => `
+                <li class="flex justify-between items-center p-2 bg-slate-100 dark:bg-slate-700 rounded-md">
+                    <span>${p}</span>
+                    <div class="flex items-center gap-2">
+                        <button data-name="${p}" class="edit-profile-btn text-blue-500 hover:underline text-xs">Renombrar</button>
+                        <button data-name="${p}" class="delete-profile-btn text-red-500 hover:text-red-700 ${Object.keys(state.profiles).length <= 1 ? 'hidden' : ''}">&times;</button>
+                    </div>
+                </li>`).join('');
+
+            mainContent.innerHTML = `
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-4">Apariencia</h3>
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-600 dark:text-slate-400">Modo Oscuro</span>
+                            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                <input type="checkbox" name="toggle" id="dark-mode-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer" ${isDarkMode ? 'checked' : ''}/>
+                                <label for="dark-mode-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-4">Gestión de Perfiles</h3>
+                        <form id="add-profile-form" class="flex gap-2 mb-4"><input type="text" name="nombre" placeholder="Nombre del nuevo perfil" required class="w-full p-2 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"><button type="submit" class="btn btn-primary">Añadir</button></form>
+                        <ul id="profiles-list" class="space-y-2">${profilesHTML || '<p class="text-center text-slate-500 dark:text-slate-400">No hay perfiles creados.</p>'}</ul>
+                    </div>
+                    <div class="card p-6 border-2 border-red-500 md:col-span-2">
+                        <h3 class="text-xl font-bold text-red-600 mb-2">Zona de Peligro</h3>
+                        <p class="text-slate-600 dark:text-slate-400 mb-4">Esta acción es irreversible. Se borrarán todos los datos del perfil activo (${state.activeProfile}).</p>
+                        <button id="reset-app-btn" class="btn btn-danger">Reiniciar Perfil Actual</button>
+                    </div>
+                </div>`;
+            
+            document.getElementById('add-profile-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const nombre = e.target.elements.nombre.value.trim();
+                if (nombre && !state.profiles[nombre]) {
+                    state.profiles[nombre] = JSON.parse(JSON.stringify(emptyProfile));
+                    updateApp();
+                } else {
+                    showAlert('Error', 'El nombre del perfil no puede estar vacío o ya existe.');
+                }
+            });
+
+            document.getElementById('profiles-list').addEventListener('click', (e) => {
+                if (e.target.classList.contains('delete-profile-btn')) {
+                    const profileName = e.target.dataset.name;
+                    showConfirm('Confirmar Eliminación', `¿Seguro que quieres eliminar el perfil "${profileName}" y todos sus datos?`, () => {
+                        delete state.profiles[profileName];
+                        if (state.activeProfile === profileName) {
+                            state.activeProfile = Object.keys(state.profiles)[0];
+                        }
+                        updateApp();
+                    });
+                }
+                if (e.target.classList.contains('edit-profile-btn')) {
+                    const profileName = e.target.dataset.name;
+                    renameProfile(profileName);
+                }
+            });
+
+            document.getElementById('reset-app-btn').addEventListener('click', () => {
+                showConfirm('¿Estás Absolutamente Seguro?', `Todos los datos del perfil "${state.activeProfile}" se borrarán permanentemente.`, resetApp);
+            });
+            document.getElementById('dark-mode-toggle').addEventListener('change', toggleTheme);
+        }
+        
+        function renderCierreDeCajaPage() {
+            const profileData = getActiveProfileData();
+            mainContent.innerHTML = `<div class="grid md:grid-cols-2 gap-8">
+                <div class="card p-6 md:col-span-2">
+                    <h3 class="text-xl font-bold mb-4">Cierre de Caja Diario</h3>
+                    <div class="flex items-center gap-4 mb-6">
+                        <label for="cierre-date" class="dark:text-slate-300">Seleccionar Fecha:</label>
+                        <input type="date" id="cierre-date" value="${todayISO()}" class="p-2 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                    <div id="cierre-summary"></div>
+                </div>
+            </div>`;
+
+            const generateCierre = (fecha) => {
+                const diaAnterior = new Date(fecha + 'T00:00:00');
+                diaAnterior.setDate(diaAnterior.getDate() - 1);
+                const fechaAnteriorISO = diaAnterior.toISOString().split('T')[0];
+
+                const saldoInicial = calculateEfectivoEnCaja(fechaAnteriorISO, profileData);
+
+                const ventasHoy = profileData.prestamos.filter(p => p.fecha === fecha).reduce((sum, p) => sum + p.monto, 0);
+                const gastosHoy = profileData.transacciones.filter(t => t.fecha === fecha && t.tipo === 'gasto').reduce((sum, t) => sum + t.monto, 0);
+                const ingresosHoy = profileData.transacciones.filter(t => t.fecha === fecha && t.tipo === 'ingreso').reduce((sum, t) => sum + t.monto, 0);
+                const recaudoHoy = profileData.prestamos.flatMap(p => p.pagos).filter(pago => pago.fecha === fecha).reduce((sum, pago) => sum + pago.monto, 0);
+                const efectivoCalculado = (saldoInicial + recaudoHoy + ingresosHoy) - (ventasHoy + gastosHoy);
+
+                const cierreDelDia = profileData.cierres[fecha];
+
+                document.getElementById('cierre-summary').innerHTML = `
+                    <div class="space-y-4 text-slate-700 dark:text-slate-300">
+                        <div class="flex justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><span class="font-medium">Saldo Inicial (Caja de Ayer):</span><span>${formatCurrency(saldoInicial)}</span></div>
+                        <div class="flex justify-between p-3"><span class="font-medium text-green-600">(+) Recaudo del Día:</span><span class="text-green-600">${formatCurrency(recaudoHoy)}</span></div>
+                        <div class="flex justify-between p-3"><span class="font-medium text-green-600">(+) Otros Ingresos:</span><span class="text-green-600">${formatCurrency(ingresosHoy)}</span></div>
+                        <div class="flex justify-between p-3"><span class="font-medium text-red-500">(-) Ventas (Salida de Capital):</span><span class="text-red-500">${formatCurrency(ventasHoy)}</span></div>
+                        <div class="flex justify-between p-3"><span class="font-medium text-red-500">(-) Gastos Operativos:</span><span class="text-red-500">${formatCurrency(gastosHoy)}</span></div>
+                        <div class="flex justify-between p-4 bg-blue-100 dark:bg-blue-900/50 rounded-lg text-blue-800 dark:text-blue-300"><span class="font-bold text-lg">Efectivo Final Calculado:</span><span class="font-bold text-lg">${formatCurrency(efectivoCalculado)}</span></div>
+                    </div>
+                    <hr class="my-6 dark:border-slate-600">
+                    ${cierreDelDia ? `
+                        <div class="bg-green-100 dark:bg-green-900/50 p-4 rounded-lg text-center">
+                            <h4 class="font-bold text-green-800 dark:text-green-300">Caja cerrada para esta fecha.</h4>
+                            <p>Efectivo Real Contado: ${formatCurrency(cierreDelDia.efectivoFinalReal)}</p>
+                            <p>Diferencia: ${formatCurrency(cierreDelDia.diferencia)}</p>
+                        </div>
+                    ` : `
+                        <form id="cierre-form" class="space-y-4">
+                            <div><label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Efectivo Final Real (Contado)</label><input type="number" name="efectivoReal" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div>
+                            <div class="flex justify-end"><button type="submit" class="btn btn-primary">Cerrar Caja</button></div>
+                        </form>
+                    `}
+                `;
+
+                if (!cierreDelDia) {
+                    document.getElementById('cierre-form').addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        const efectivoFinalReal = parseFloat(e.target.elements.efectivoReal.value);
+                        if (isNaN(efectivoFinalReal)) return;
+                        
+                        profileData.cierres[fecha] = {
+                            saldoInicial, recaudoHoy, ingresosHoy, ventasHoy, gastosHoy, efectivoCalculado, efectivoFinalReal,
+                            diferencia: efectivoFinalReal - efectivoCalculado
+                        };
+                        updateApp();
+                        showAlert('Caja Cerrada', `La caja para el día ${fecha} ha sido cerrada con éxito.`);
+                    });
+                }
+            };
+
+            document.getElementById('cierre-date').addEventListener('change', (e) => generateCierre(e.target.value));
+            generateCierre(todayISO());
+        }
+
+        function openFormModal(title, formHTML, submitHandler) { modalTitle.textContent = title; modalForm.innerHTML = formHTML; modalForm.onsubmit = e => { e.preventDefault(); submitHandler(e.target); }; formModal.classList.remove('hidden'); }
+        function closeFormModal() { formModal.classList.add('hidden'); }
+        function showAlert(title, message) { alertTitle.textContent = title; alertMessage.textContent = message; alertButtons.innerHTML = `<button id="alert-ok-btn" class="btn btn-primary">OK</button>`; alertModal.classList.remove('hidden'); document.getElementById('alert-ok-btn').onclick = () => alertModal.classList.add('hidden'); }
+        function showConfirm(title, message, onConfirm) { alertTitle.textContent = title; alertMessage.textContent = message; alertButtons.innerHTML = `<button id="confirm-cancel-btn" class="btn btn-secondary">Cancelar</button><button id="confirm-ok-btn" class="btn btn-danger">Confirmar</button>`; alertModal.classList.remove('hidden'); document.getElementById('confirm-ok-btn').onclick = () => { alertModal.classList.add('hidden'); onConfirm(); }; document.getElementById('confirm-cancel-btn').onclick = () => alertModal.classList.add('hidden'); }
+        
+        async function openClienteModal(id) {
+            const profileData = getActiveProfileData();
+            const cliente = profileData.clientes.find(c => c.id === id);
+            openFormModal(cliente ? 'Editar Cliente' : 'Nuevo Cliente', `<input type="hidden" name="id" value="${cliente?.id || ''}"><div class="space-y-4"><div><label class="dark:text-slate-300">Nombre Completo</label><input type="text" name="nombre" value="${cliente?.nombre || ''}" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div><div><label class="dark:text-slate-300">Ruta/Zona</label><input type="text" name="ruta" value="${cliente?.ruta || ''}" class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div><div><label class="dark:text-slate-300">Documento</label><input type="text" name="documento" value="${cliente?.documento || ''}" class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div><div><label class="dark:text-slate-300">Teléfono</label><input type="tel" name="telefono" value="${cliente?.telefono || ''}" class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div><div><label class="dark:text-slate-300">Dirección</label><input type="text" name="direccion" value="${cliente?.direccion || ''}" class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div><div><label class="dark:text-slate-300">Foto (Opcional)</label><input type="file" name="imagen" accept="image/*" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"></div>${cliente?.imagenUrl ? `<img src="${cliente.imagenUrl}" class="w-32 h-32 object-cover rounded-lg mt-2">` : ''}</div><div class="mt-6 flex justify-end"><button type="submit" class="btn btn-primary">Guardar</button></div>`, 
+            async (form) => {
+                const formData = new FormData(form);
+                const data = Object.fromEntries(formData.entries());
+                const file = form.elements.imagen.files[0];
+                if (file) { data.imagenUrl = await readFileAsDataURL(file); } else if (cliente) { data.imagenUrl = cliente.imagenUrl; }
+                if (data.id) { const index = profileData.clientes.findIndex(c => c.id === data.id); profileData.clientes[index] = {...profileData.clientes[index], ...data}; } 
+                else { data.id = crypto.randomUUID(); profileData.clientes.push(data); }
+                updateApp();
+                closeFormModal();
+            });
+        }
+        function openTransaccionModal(id, type) {
+            const profileData = getActiveProfileData();
+            const transaccion = profileData.transacciones.find(t => t.id === id);
+            const defaultType = type || transaccion?.tipo || 'gasto';
+            openFormModal(transaccion ? 'Editar Transacción' : 'Nueva Transacción', `
+                <input type="hidden" name="id" value="${transaccion?.id || ''}">
+                <div class="space-y-4">
+                    <div><label class="dark:text-slate-300">Tipo</label><select name="tipo" class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"><option value="gasto" ${defaultType === 'gasto' ? 'selected' : ''}>Gasto</option><option value="ingreso" ${defaultType === 'ingreso' ? 'selected' : ''}>Ingreso</option></select></div>
+                    <div><label class="dark:text-slate-300">Descripción</label><input type="text" name="descripcion" value="${transaccion?.descripcion || ''}" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div>
+                    <div><label class="dark:text-slate-300">Monto</label><input type="number" name="monto" value="${transaccion?.monto || ''}" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div>
+                    <div><label class="dark:text-slate-300">Fecha</label><input type="date" name="fecha" value="${transaccion?.fecha || todayISO()}" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div>
+                    <div class="flex items-center"><input type="checkbox" id="esRecurrente" name="esRecurrente" ${transaccion?.esRecurrente ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><label for="esRecurrente" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">Gasto Recurrente</label></div>
+                </div>
+                <div class="mt-6 flex justify-end"><button type="submit" class="btn btn-primary">Guardar</button></div>`, 
+            (form) => {
+                const data = Object.fromEntries(new FormData(form).entries());
+                data.monto = parseFloat(data.monto);
+                data.esRecurrente = form.elements.esRecurrente.checked;
+                if (data.id) {
+                    const index = profileData.transacciones.findIndex(t => t.id === data.id);
+                    if (index > -1) profileData.transacciones[index] = data;
+                } else {
+                    data.id = crypto.randomUUID();
+                    profileData.transacciones.push(data);
+                }
+                updateApp();
+                closeFormModal();
+            });
+        }
+        function openPrestamoModal() { 
+            const profileData = getActiveProfileData();
+            const clienteOptions = profileData.clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join(''); 
+            openFormModal('Nueva Venta', `<div class="space-y-4"><div><label class="dark:text-slate-300">Cliente</label><select name="clienteId" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white">${clienteOptions}</select></div><div><label class="dark:text-slate-300">Monto Venta</label><input type="number" name="monto" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div><div><label class="dark:text-slate-300">Interés (%)</label><input type="number" name="interes" value="20" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div><div><label class="dark:text-slate-300">Plazo (días)</label><input type="number" name="plazoDias" value="30" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div><div><label class="dark:text-slate-300">Fecha</label><input type="date" name="fecha" value="${todayISO()}" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div></div><div class="mt-6 flex justify-end"><button type="submit" class="btn btn-primary">Crear Venta</button></div>`, (form) => { addPrestamo(Object.fromEntries(new FormData(form).entries())); closeFormModal(); }); }
+        
+        function openPagoModal(prestamoId, pagoId) {
+            const profileData = getActiveProfileData();
+            const prestamo = profileData.prestamos.find(p => p.id === prestamoId);
+            const pago = prestamo?.pagos.find(p => p.id === pagoId);
+            if (!pago) return;
+
+            openFormModal('Editar Pago', `
+                <input type="hidden" name="prestamoId" value="${prestamoId}">
+                <input type="hidden" name="pagoId" value="${pagoId}">
+                <div class="space-y-4">
+                    <div><label class="dark:text-slate-300">Fecha</label><input type="date" name="fecha" value="${pago.fecha}" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div>
+                    <div><label class="dark:text-slate-300">Monto</label><input type="number" name="monto" value="${pago.monto}" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"></div>
+                </div>
+                <div class="mt-6 flex justify-end"><button type="submit" class="btn btn-primary">Guardar Cambios</button></div>`,
+            (form) => {
+                const data = Object.fromEntries(new FormData(form).entries());
+                updatePago(data.prestamoId, data.pagoId, parseFloat(data.monto), data.fecha);
+                closeFormModal();
+            });
+        }
+
+        async function fetchExchangeRates() { try { const response = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL,COP-BRL'); if (!response.ok) throw new Error('Network response was not ok.'); const data = await response.json(); return { usdt_brl: parseFloat(data.USDBRL.bid), cop_brl: parseFloat(data.COPBRL.bid) }; } catch (error) { console.error("Failed to fetch exchange rates:", error); showAlert('Error de Red', 'No se pudieron cargar las tasas de cambio. Se usarán valores por defecto.'); return { usdt_brl: 5.40, cop_brl: 0.0013 }; } }
+        
+        function deleteCliente(clienteId) {
+            const profileData = getActiveProfileData();
+            const cliente = profileData.clientes.find(c => c.id === clienteId);
+            if (!cliente) return;
+            
+            showConfirm(
+                'Confirmar Eliminación Total', 
+                `¿Estás absolutamente seguro de que quieres eliminar a "${cliente.nombre}"? Se borrará el cliente y TODO su historial de ventas y pagos de forma permanente. Esta acción no se puede deshacer.`, 
+                () => { 
+                    // Filter out the client
+                    profileData.clientes = profileData.clientes.filter(c => c.id !== clienteId); 
+                    // Filter out all loans associated with the client
+                    profileData.prestamos = profileData.prestamos.filter(p => p.clienteId !== clienteId); 
+                    updateApp(); 
+                    showAlert('Cliente Eliminado', `El cliente "${cliente.nombre}" y todo su historial han sido eliminados.`);
+                }
+            ); 
+        }
+        
+        function deleteTransaccion(id) {
+            const profileData = getActiveProfileData();
+            showConfirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar esta transacción?', () => {
+                profileData.transacciones = profileData.transacciones.filter(t => t.id !== id);
+                updateApp();
+            });
+        }
+        
+        function addPrestamo(data) { 
+            const profileData = getActiveProfileData();
+            let monto = parseFloat(data.monto);
+            const interes = parseFloat(data.interes) / 100, plazoDias = parseInt(data.plazoDias), montoTotal = monto * (1 + interes); 
+            profileData.prestamos.push({ id: crypto.randomUUID(), clienteId: data.clienteId, monto, interes: parseFloat(data.interes), montoTotal, plazoDias, cuotaDiaria: montoTotal / plazoDias, saldo: montoTotal, fecha: data.fecha, status: 'Activo', pagos: [], noPagos: [] }); 
+            updateApp(); 
+        }
+        
+        function recalculateSaldo(prestamo) {
+            const totalPagado = prestamo.pagos.reduce((sum, p) => sum + p.monto, 0);
+            prestamo.saldo = prestamo.montoTotal - totalPagado;
+            if (prestamo.saldo <= 0.01) {
+                prestamo.saldo = 0;
+                prestamo.status = 'Pagado';
+            } else {
+                prestamo.status = 'Activo';
+            }
+        }
+
+        function addPago(prestamoId, monto, fecha) { 
+            const profileData = getActiveProfileData();
+            const prestamo = profileData.prestamos.find(p => p.id === prestamoId); 
+            if (!prestamo || monto <= 0) return; 
+            prestamo.pagos.push({ id: crypto.randomUUID(), fecha, monto }); 
+            recalculateSaldo(prestamo);
+            updateApp(); 
+        }
+
+        function markAsNoPay(prestamoId) {
+            const profileData = getActiveProfileData();
+            const prestamo = profileData.prestamos.find(p => p.id === prestamoId);
+            if (prestamo) {
+                if (!prestamo.noPagos) prestamo.noPagos = [];
+                prestamo.noPagos.push({ fecha: todayISO() });
+                updateApp();
+            }
+        }
+
+        function updatePago(prestamoId, pagoId, newMonto, newFecha) {
+            const profileData = getActiveProfileData();
+            const prestamo = profileData.prestamos.find(p => p.id === prestamoId);
+            const pagoIndex = prestamo?.pagos.findIndex(p => p.id === pagoId);
+            if (pagoIndex > -1) {
+                prestamo.pagos[pagoIndex].monto = newMonto;
+                prestamo.pagos[pagoIndex].fecha = newFecha;
+                recalculateSaldo(prestamo);
+                updateApp();
+            }
+        }
+
+        function deletePago(prestamoId, pagoId) {
+            const profileData = getActiveProfileData();
+            showConfirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar este pago?', () => {
+                const prestamo = profileData.prestamos.find(p => p.id === prestamoId);
+                if (prestamo) {
+                    prestamo.pagos = prestamo.pagos.filter(p => p.id !== pagoId);
+                    recalculateSaldo(prestamo);
+                    updateApp();
+                }
+            });
+        }
+
+        function exportData() { const dataStr = JSON.stringify(state, null, 2); const dataBlob = new Blob([dataStr], {type: "application/json"}); const url = URL.createObjectURL(dataBlob); const link = document.createElement('a'); link.href = url; link.download = `CrediApp_Backup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); showAlert('Éxito', 'Tus datos se han exportado correctamente.'); }
+        
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+
+                    // NEW FORMAT (MULTI-PROFILE) BACKUP
+                    if (importedData.profiles && importedData.activeProfile) {
+                        showConfirm('Importación Completa', 'Este respaldo contiene múltiples perfiles. ¿Quieres reemplazar TODOS tus perfiles y datos actuales con los del archivo?', () => {
+                            state = importedData;
+                            updateApp();
+                            showAlert('Éxito', 'Los datos se han importado y reemplazado correctamente.');
+                        });
+                    }
+                    // OLD FORMAT (SINGLE-PROFILE) BACKUP
+                    else if (importedData.clientes && importedData.prestamos) {
+                        showConfirm(`Importar en Perfil Actual`, `Hemos detectado un respaldo antiguo. ¿Quieres importar estos datos en el perfil actual "${state.activeProfile}"? Se reemplazarán todos los datos de este perfil.`, () => {
+                            const profileData = {
+                                clientes: importedData.clientes || [],
+                                prestamos: importedData.prestamos || [],
+                                transacciones: importedData.transacciones || [],
+                                patrimonio: importedData.patrimonio || { cop: 0, crypto: 0 },
+                                cierres: importedData.cierres || {}
+                            };
+                            state.profiles[state.activeProfile] = profileData;
+                            updateApp();
+                            showAlert('Éxito', `Los datos se han importado en el perfil "${state.activeProfile}".`);
+                        });
+                    }
+                    // INVALID FORMAT
+                    else {
+                        showAlert('Error', 'El archivo de respaldo no tiene el formato correcto.');
+                    }
+                } catch (error) {
+                    showAlert('Error', 'No se pudo leer el archivo. Asegúrate de que sea un respaldo válido.');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function readFileAsDataURL(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); }
+        
+        function renderIngresosGastosChart() {
+            const ctx = document.getElementById('ingresosGastosChart')?.getContext('2d');
+            if (!ctx) return;
+            const profileData = getActiveProfileData();
+            const data = {};
+            profileData.prestamos.flatMap(p => p.pagos).forEach(p => { const month = p.fecha.substring(0, 7); data[month] = { ...(data[month]), ingresos: (data[month]?.ingresos || 0) + p.monto }; });
+            profileData.transacciones.filter(t => t.tipo === 'gasto').forEach(t => { const month = t.fecha.substring(0, 7); data[month] = { ...(data[month]), gastos: (data[month]?.gastos || 0) + t.monto }; });
+            const labels = Object.keys(data).sort();
+            new Chart(ctx, { type: 'bar', data: { labels, datasets: [ { label: 'Recaudado', data: labels.map(l => data[l].ingresos || 0), backgroundColor: 'rgba(59, 130, 246, 0.7)' }, { label: 'Gastos', data: labels.map(l => data[l].gastos || 0), backgroundColor: 'rgba(239, 68, 68, 0.7)' } ] }, options: { responsive: true, scales: { y: { beginAtZero: true } } } });
+        }
+
+        function renderCarteraChart() {
+            const ctx = document.getElementById('carteraChart')?.getContext('2d');
+            if (!ctx) return;
+            const profileData = getActiveProfileData();
+            const data = profileData.prestamos.filter(p => p.status === 'Activo').reduce((acc, p) => { const cliente = profileData.clientes.find(c => c.id === p.clienteId); if (cliente) { acc[cliente.nombre] = (acc[cliente.nombre] || 0) + p.saldo; } return acc; }, {});
+            new Chart(ctx, { type: 'pie', data: { labels: Object.keys(data), datasets: [{ data: Object.values(data), backgroundColor: ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899'] }] }, options: { responsive: true } });
+        }
+
+        function renderRecaudoTrendChart() {
+            const ctx = document.getElementById('recaudoTrendChart')?.getContext('2d');
+            if (!ctx) return;
+            const profileData = getActiveProfileData();
+
+            const recaudosLast30Days = {};
+            const ventasLast30Days = {};
+            const labels = [];
+            for (let i = 29; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const dateString = d.toISOString().split('T')[0];
+                labels.push(dateString);
+                recaudosLast30Days[dateString] = 0;
+                ventasLast30Days[dateString] = 0;
+            }
+
+            profileData.prestamos.flatMap(p => p.pagos).forEach(p => {
+                if (recaudosLast30Days[p.fecha] !== undefined) {
+                    recaudosLast30Days[p.fecha] += p.monto;
+                }
+            });
+
+            profileData.prestamos.forEach(p => {
+                if (ventasLast30Days[p.fecha] !== undefined) {
+                    ventasLast30Days[p.fecha] += p.monto;
+                }
+            });
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Recaudo Diario',
+                            data: Object.values(recaudosLast30Days),
+                            borderColor: '#16a34a', // Verde
+                            tension: 0.1,
+                            fill: false
+                        },
+                        {
+                            label: 'Venta Diaria',
+                            data: Object.values(ventasLast30Days),
+                            borderColor: '#ef4444', // Rojo
+                            tension: 0.1,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+        
+        async function exportToPDF(elementId, fileName) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+            const canvas = await html2canvas(element, { scale: 2, backgroundColor: document.documentElement.classList.contains('dark') ? '#1e293b' : '#ffffff' });
+            const imgData = canvas.toDataURL('image/png');
+            const imgProps= pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+            pdf.addImage(imgData, 'PNG', 10, 10, pdfWidth - 20, pdfHeight - 20);
+            pdf.save(`${fileName}.pdf`);
+        }
+        
+        function resetApp() {
+            state.profiles[state.activeProfile] = JSON.parse(JSON.stringify(emptyProfile));
+            updateApp();
+            showAlert('Completado', `El perfil ${state.activeProfile} ha sido reiniciado.`);
+        }
+
+        function toggleTheme(event) {
+            if (event.target.checked) {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('crediAppTheme', 'dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('crediAppTheme', 'light');
+            }
+            navigate(); // Recargar la vista para que los gráficos se adapten al nuevo tema
+        }
+        
+        function renderProfileSwitcher() {
+            const container = document.getElementById('profile-switcher-container');
+            const profileNames = Object.keys(state.profiles);
+            const options = profileNames.map(name => `<option value="${name}" ${name === state.activeProfile ? 'selected' : ''}>${name}</option>`).join('');
+            container.innerHTML = `
+                <select id="profile-switcher" class="p-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white bg-white text-sm">
+                    ${options}
+                </select>
+            `;
+            document.getElementById('profile-switcher').addEventListener('change', (e) => {
+                state.activeProfile = e.target.value;
+                updateApp();
+            });
+        }
+        
+        function renameProfile(oldName) {
+            openFormModal(
+                `Renombrar Perfil`,
+                `
+                <div class="space-y-4">
+                    <div>
+                        <label class="dark:text-slate-300">Nuevo nombre para "${oldName}"</label>
+                        <input type="text" name="newName" value="${oldName}" required class="w-full p-2 mt-1 border rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                </div>
+                `,
+                (form) => {
+                    const newName = form.elements.newName.value;
+                    const finalNewName = newName.trim();
+
+                    if (finalNewName === '') {
+                        showAlert('Error', 'El nombre del perfil no puede estar vacío.');
+                        return;
+                    }
+                    
+                    if (finalNewName === oldName) {
+                        closeFormModal();
+                        return; // No change needed.
+                    }
+
+                    if (state.profiles[finalNewName]) {
+                        showAlert('Error', `El perfil "${finalNewName}" ya existe.`);
+                        return;
+                    }
+
+                    state.profiles[finalNewName] = state.profiles[oldName];
+                    delete state.profiles[oldName];
+
+                    if (state.activeProfile === oldName) {
+                        state.activeProfile = finalNewName;
+                    }
+
+                    closeFormModal();
+                    updateApp();
+                    showAlert('Éxito', `El perfil "${oldName}" ha sido renombrado a "${finalNewName}".`);
+                }
+            );
+        }
+
+        function updateApp() { saveState(); navigate(); }
+
+        closeModalBtn.addEventListener('click', closeFormModal);
+        formModal.addEventListener('click', e => { if (e.target === formModal) closeFormModal(); });
+        menuToggleBtn.addEventListener('click', () => { sidebar.classList.toggle('-translate-x-full'); sidebarOverlay.classList.toggle('hidden'); });
+        sidebarOverlay.addEventListener('click', () => { sidebar.classList.add('-translate-x-full'); sidebarOverlay.classList.add('hidden'); });
+        window.addEventListener('hashchange', navigate);
+        
+        async function initializeApp() {
+            loadState();
+            state.rates = await fetchExchangeRates();
+            navigate();
+            setInterval(updateClock, 1000);
+            updateClock();
+        }
+        
+        initializeApp();
+    });
+    </script>
+</body>
+</html>
