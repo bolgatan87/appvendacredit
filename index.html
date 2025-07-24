@@ -272,7 +272,7 @@
                 <div class="card p-6"><h3 class="text-slate-500 dark:text-slate-400">Efectivo en Caja</h3><p class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">${formatCurrency(efectivoEnCaja)}</p></div>
                 <div class="card p-6"><h3 class="text-slate-500 dark:text-slate-400">Cartera Activa</h3><p class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">${formatCurrency(carteraActiva)}</p></div>
                 
-                <div class="card p-6 md:col-span-2 lg:col-span-5"><h3 class="text-xl font-bold mb-4 text-slate-800 dark:text-slate-200">Tendencia de Ventas vs. Recaudo (Últimos 30 días)</h3><canvas id="recaudoTrendChart"></canvas></div>
+                <div class="card p-6 md:col-span-2 lg:col-span-5"><h3 class="text-xl font-bold mb-4 text-slate-800 dark:text-slate-200">Tendencia de Movimientos (Últimos 30 días)</h3><canvas id="recaudoTrendChart"></canvas></div>
             </div>`;
             renderRecaudoTrendChart();
         }
@@ -1116,7 +1116,10 @@
 
             const recaudosLast30Days = {};
             const ventasLast30Days = {};
+            const ingresosLast30Days = {};
+            const gastosLast30Days = {};
             const labels = [];
+
             for (let i = 29; i >= 0; i--) {
                 const d = new Date();
                 d.setDate(d.getDate() - i);
@@ -1124,6 +1127,8 @@
                 labels.push(dateString);
                 recaudosLast30Days[dateString] = 0;
                 ventasLast30Days[dateString] = 0;
+                ingresosLast30Days[dateString] = 0;
+                gastosLast30Days[dateString] = 0;
             }
 
             profileData.prestamos.flatMap(p => p.pagos).forEach(p => {
@@ -1135,6 +1140,14 @@
             profileData.prestamos.forEach(p => {
                 if (ventasLast30Days[p.fecha] !== undefined) {
                     ventasLast30Days[p.fecha] += p.monto;
+                }
+            });
+            
+            profileData.transacciones.forEach(t => {
+                if (t.tipo === 'ingreso' && ingresosLast30Days[t.fecha] !== undefined) {
+                    ingresosLast30Days[t.fecha] += t.monto;
+                } else if (t.tipo === 'gasto' && gastosLast30Days[t.fecha] !== undefined) {
+                    gastosLast30Days[t.fecha] += t.monto;
                 }
             });
 
@@ -1154,6 +1167,20 @@
                             label: 'Venta Diaria',
                             data: Object.values(ventasLast30Days),
                             borderColor: '#ef4444', // Rojo
+                            tension: 0.1,
+                            fill: false
+                        },
+                        {
+                            label: 'Ingresos (Capital)',
+                            data: Object.values(ingresosLast30Days),
+                            borderColor: '#3b82f6', // Azul
+                            tension: 0.1,
+                            fill: false
+                        },
+                        {
+                            label: 'Gastos',
+                            data: Object.values(gastosLast30Days),
+                            borderColor: '#f97316', // Naranja
                             tension: 0.1,
                             fill: false
                         }
