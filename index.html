@@ -272,7 +272,7 @@
                 <div class="card p-6"><h3 class="text-slate-500 dark:text-slate-400">Efectivo en Caja</h3><p class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">${formatCurrency(efectivoEnCaja)}</p></div>
                 <div class="card p-6"><h3 class="text-slate-500 dark:text-slate-400">Cartera Activa</h3><p class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">${formatCurrency(carteraActiva)}</p></div>
                 
-                <div class="card p-6 md:col-span-2 lg:col-span-5"><h3 class="text-xl font-bold mb-4 text-slate-800 dark:text-slate-200">Tendencia de Movimientos (Últimos 30 días)</h3><canvas id="recaudoTrendChart"></canvas></div>
+                <div class="card p-6 md:col-span-2 lg:col-span-5"><h3 class="text-xl font-bold mb-4 text-slate-800 dark:text-slate-200">Tendencia de Movimientos (Este Mes)</h3><canvas id="recaudoTrendChart"></canvas></div>
             </div>`;
             renderRecaudoTrendChart();
         }
@@ -801,8 +801,8 @@
         
         function renderCierreDeCajaPage() {
             const profileData = getActiveProfileData();
-            mainContent.innerHTML = `<div class="grid md:grid-cols-2 gap-8">
-                <div class="card p-6 md:col-span-2">
+            mainContent.innerHTML = `<div class="space-y-8">
+                <div class="card p-6">
                     <h3 class="text-xl font-bold mb-4">Cierre de Caja Diario</h3>
                     <div class="flex items-center gap-4 mb-6">
                         <label for="cierre-date" class="dark:text-slate-300">Seleccionar Fecha:</label>
@@ -817,24 +817,56 @@
                 diaAnterior.setDate(diaAnterior.getDate() - 1);
                 const fechaAnteriorISO = diaAnterior.toISOString().split('T')[0];
 
+                // Cálculos Financieros
                 const saldoInicial = calculateEfectivoEnCaja(fechaAnteriorISO, profileData);
-
                 const ventasHoy = profileData.prestamos.filter(p => p.fecha === fecha).reduce((sum, p) => sum + p.monto, 0);
                 const gastosHoy = profileData.transacciones.filter(t => t.fecha === fecha && t.tipo === 'gasto').reduce((sum, t) => sum + t.monto, 0);
                 const ingresosHoy = profileData.transacciones.filter(t => t.fecha === fecha && t.tipo === 'ingreso').reduce((sum, t) => sum + t.monto, 0);
                 const recaudoHoy = profileData.prestamos.flatMap(p => p.pagos).filter(pago => pago.fecha === fecha).reduce((sum, pago) => sum + pago.monto, 0);
                 const efectivoCalculado = (saldoInicial + recaudoHoy + ingresosHoy) - (ventasHoy + gastosHoy);
 
+                // Cálculos de Clientes y Cobranza
+                const clientesActivosHoy = new Set(profileData.prestamos.filter(p => p.status === 'Activo' || p.fechaPagado === fecha).map(p => p.clienteId)).size;
+                const clientesNuevosHoy = profileData.clientes.filter(c => c.fechaCreacion === fecha).length;
+                const clientesFinalizadosHoy = new Set(profileData.prestamos.filter(p => p.fechaPagado === fecha).map(p => p.clienteId)).size;
+
+                const clientesQuePagaronHoy = new Set(profileData.prestamos.flatMap(p => p.pagos).filter(pago => pago.fecha === fecha).map(pago => {
+                    const prestamo = profileData.prestamos.find(pr => pr.pagos.some(pa => pa.id === pago.id));
+                    return prestamo ? prestamo.clienteId : null;
+                })).size;
+                
+                const recaudoEsperado = profileData.prestamos.filter(p => p.status === 'Activo' || p.fechaPagado === fecha).reduce((sum, p) => sum + p.cuotaDiaria, 0);
+                const porcentajeRecaudo = recaudoEsperado > 0 ? ((recaudoHoy / recaudoEsperado) * 100).toFixed(0) : 0;
+                const noPagaron = clientesActivosHoy - clientesQuePagaronHoy;
+
                 const cierreDelDia = profileData.cierres[fecha];
 
                 document.getElementById('cierre-summary').innerHTML = `
-                    <div class="space-y-4 text-slate-700 dark:text-slate-300">
-                        <div class="flex justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><span class="font-medium">Saldo Inicial (Caja de Ayer):</span><span>${formatCurrency(saldoInicial)}</span></div>
-                        <div class="flex justify-between p-3"><span class="font-medium text-green-600">(+) Recaudo del Día:</span><span class="text-green-600">${formatCurrency(recaudoHoy)}</span></div>
-                        <div class="flex justify-between p-3"><span class="font-medium text-green-600">(+) Otros Ingresos:</span><span class="text-green-600">${formatCurrency(ingresosHoy)}</span></div>
-                        <div class="flex justify-between p-3"><span class="font-medium text-red-500">(-) Ventas (Salida de Capital):</span><span class="text-red-500">${formatCurrency(ventasHoy)}</span></div>
-                        <div class="flex justify-between p-3"><span class="font-medium text-red-500">(-) Gastos Operativos:</span><span class="text-red-500">${formatCurrency(gastosHoy)}</span></div>
-                        <div class="flex justify-between p-4 bg-blue-100 dark:bg-blue-900/50 rounded-lg text-blue-800 dark:text-blue-300"><span class="font-bold text-lg">Efectivo Final Calculado:</span><span class="font-bold text-lg">${formatCurrency(efectivoCalculado)}</span></div>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="font-bold text-lg mb-2 text-slate-800 dark:text-slate-200">Resumen Financiero</h4>
+                            <div class="space-y-2 text-slate-700 dark:text-slate-300 text-sm">
+                                <div class="flex justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><span class="font-medium">Saldo Inicial (Caja de Ayer):</span><span>${formatCurrency(saldoInicial)}</span></div>
+                                <div class="flex justify-between p-2"><span class="font-medium text-green-600">(+) Recaudo del Día:</span><span class="text-green-600">${formatCurrency(recaudoHoy)}</span></div>
+                                <div class="flex justify-between p-2"><span class="font-medium text-green-600">(+) Otros Ingresos:</span><span class="text-green-600">${formatCurrency(ingresosHoy)}</span></div>
+                                <div class="flex justify-between p-2"><span class="font-medium text-red-500">(-) Ventas (Salida de Capital):</span><span class="text-red-500">${formatCurrency(ventasHoy)}</span></div>
+                                <div class="flex justify-between p-2"><span class="font-medium text-red-500">(-) Gastos Operativos:</span><span class="text-red-500">${formatCurrency(gastosHoy)}</span></div>
+                                <div class="flex justify-between p-3 bg-blue-100 dark:bg-blue-900/50 rounded-lg text-blue-800 dark:text-blue-300"><span class="font-bold">Efectivo Final Calculado:</span><span class="font-bold">${formatCurrency(efectivoCalculado)}</span></div>
+                            </div>
+                        </div>
+                        <div>
+                             <h4 class="font-bold text-lg mb-2 text-slate-800 dark:text-slate-200">Resumen de Clientes y Cobranza</h4>
+                             <div class="space-y-2 text-slate-700 dark:text-slate-300 text-sm">
+                                <div class="flex justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><span class="font-medium">Clientes Activos del Día:</span><span>${clientesActivosHoy}</span></div>
+                                <div class="flex justify-between p-2"><span class="font-medium">Clientes Nuevos:</span><span>${clientesNuevosHoy}</span></div>
+                                <div class="flex justify-between p-2"><span class="font-medium">Clientes Finalizados:</span><span>${clientesFinalizadosHoy}</span></div>
+                                <hr class="my-2 dark:border-slate-600">
+                                <div class="flex justify-between p-2"><span class="font-medium">Recaudo Esperado:</span><span>${formatCurrency(recaudoEsperado)}</span></div>
+                                <div class="flex justify-between p-2"><span class="font-medium">Porcentaje Recaudado:</span><span>${porcentajeRecaudo}%</span></div>
+                                <div class="flex justify-between p-2"><span class="font-medium">Pagaron / Total:</span><span>${clientesQuePagaronHoy} / ${clientesActivosHoy}</span></div>
+                                <div class="flex justify-between p-2"><span class="font-medium text-red-500">No Pagaron:</span><span class="text-red-500">${noPagaron}</span></div>
+                             </div>
+                        </div>
                     </div>
                     <hr class="my-6 dark:border-slate-600">
                     ${cierreDelDia ? `
@@ -886,7 +918,7 @@
                 const file = form.elements.imagen.files[0];
                 if (file) { data.imagenUrl = await readFileAsDataURL(file); } else if (cliente) { data.imagenUrl = cliente.imagenUrl; }
                 if (data.id) { const index = profileData.clientes.findIndex(c => c.id === data.id); profileData.clientes[index] = {...profileData.clientes[index], ...data}; } 
-                else { data.id = crypto.randomUUID(); profileData.clientes.push(data); }
+                else { data.id = crypto.randomUUID(); data.fechaCreacion = todayISO(); profileData.clientes.push(data); }
                 updateApp();
                 closeFormModal();
             });
@@ -1114,40 +1146,44 @@
             if (!ctx) return;
             const profileData = getActiveProfileData();
 
-            const recaudosLast30Days = {};
-            const ventasLast30Days = {};
-            const ingresosLast30Days = {};
-            const gastosLast30Days = {};
+            const recaudosThisMonth = {};
+            const ventasThisMonth = {};
+            const ingresosThisMonth = {};
+            const gastosThisMonth = {};
             const labels = [];
 
-            for (let i = 29; i >= 0; i--) {
-                const d = new Date();
-                d.setDate(d.getDate() - i);
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = today.getMonth();
+            const currentDay = today.getDate();
+
+            for (let i = 1; i <= currentDay; i++) {
+                const d = new Date(year, month, i);
                 const dateString = d.toISOString().split('T')[0];
                 labels.push(dateString);
-                recaudosLast30Days[dateString] = 0;
-                ventasLast30Days[dateString] = 0;
-                ingresosLast30Days[dateString] = 0;
-                gastosLast30Days[dateString] = 0;
+                recaudosThisMonth[dateString] = 0;
+                ventasThisMonth[dateString] = 0;
+                ingresosThisMonth[dateString] = 0;
+                gastosThisMonth[dateString] = 0;
             }
 
             profileData.prestamos.flatMap(p => p.pagos).forEach(p => {
-                if (recaudosLast30Days[p.fecha] !== undefined) {
-                    recaudosLast30Days[p.fecha] += p.monto;
+                if (recaudosThisMonth[p.fecha] !== undefined) {
+                    recaudosThisMonth[p.fecha] += p.monto;
                 }
             });
 
             profileData.prestamos.forEach(p => {
-                if (ventasLast30Days[p.fecha] !== undefined) {
-                    ventasLast30Days[p.fecha] += p.monto;
+                if (ventasThisMonth[p.fecha] !== undefined) {
+                    ventasThisMonth[p.fecha] += p.monto;
                 }
             });
             
             profileData.transacciones.forEach(t => {
-                if (t.tipo === 'ingreso' && ingresosLast30Days[t.fecha] !== undefined) {
-                    ingresosLast30Days[t.fecha] += t.monto;
-                } else if (t.tipo === 'gasto' && gastosLast30Days[t.fecha] !== undefined) {
-                    gastosLast30Days[t.fecha] += t.monto;
+                if (t.tipo === 'ingreso' && ingresosThisMonth[t.fecha] !== undefined) {
+                    ingresosThisMonth[t.fecha] += t.monto;
+                } else if (t.tipo === 'gasto' && gastosThisMonth[t.fecha] !== undefined) {
+                    gastosThisMonth[t.fecha] += t.monto;
                 }
             });
 
@@ -1158,28 +1194,28 @@
                     datasets: [
                         {
                             label: 'Recaudo Diario',
-                            data: Object.values(recaudosLast30Days),
+                            data: Object.values(recaudosThisMonth),
                             borderColor: '#16a34a', // Verde
                             tension: 0.1,
                             fill: false
                         },
                         {
                             label: 'Venta Diaria',
-                            data: Object.values(ventasLast30Days),
+                            data: Object.values(ventasThisMonth),
                             borderColor: '#ef4444', // Rojo
                             tension: 0.1,
                             fill: false
                         },
                         {
                             label: 'Ingresos (Capital)',
-                            data: Object.values(ingresosLast30Days),
+                            data: Object.values(ingresosThisMonth),
                             borderColor: '#3b82f6', // Azul
                             tension: 0.1,
                             fill: false
                         },
                         {
                             label: 'Gastos',
-                            data: Object.values(gastosLast30Days),
+                            data: Object.values(gastosThisMonth),
                             borderColor: '#f97316', // Naranja
                             tension: 0.1,
                             fill: false
