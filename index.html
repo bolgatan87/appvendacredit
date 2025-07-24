@@ -359,9 +359,24 @@
             const profileData = getActiveProfileData();
             const hoy = todayISO();
             
-            const sortedClients = [...profileData.clientes].sort((a, b) => a.nombre.localeCompare(b.nombre));
+            const clientesFiltrados = profileData.clientes.filter(cliente => {
+                const prestamosCliente = profileData.prestamos.filter(p => p.clienteId === cliente.id);
+                if (prestamosCliente.length === 0) return true; // Always show clients with no loans
+                
+                const hasActiveLoans = prestamosCliente.some(p => p.status === 'Activo');
+                if (hasActiveLoans) return true;
+                
+                // If no active loans, check if the last loan was paid off today
+                const lastPaidDate = prestamosCliente
+                    .map(p => p.fechaPagado)
+                    .filter(Boolean)
+                    .sort()
+                    .pop();
+                
+                return lastPaidDate === hoy;
+            }).sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-            let tableRows = sortedClients.map((cliente, index) => {
+            let tableRows = clientesFiltrados.map((cliente, index) => {
                 const ventasActivas = profileData.prestamos.filter(p => p.clienteId === cliente.id && p.status === 'Activo');
                 const totalVendido = ventasActivas.reduce((sum, v) => sum + v.monto, 0);
                 const totalSaldo = ventasActivas.reduce((sum, v) => sum + v.saldo, 0);
@@ -388,7 +403,7 @@
                             <span><span class="text-slate-500">Cuotas:</span> ${cuotasRestantes}</span>
                             <span class="font-bold text-red-500"><span class="text-slate-500 font-normal">Saldo:</span> ${formatCurrency(totalSaldo)}</span>
                         </div>
-                        ` : '<span class="text-slate-500 dark:text-slate-400">Sin deuda activa</span>'}
+                        ` : '<span class="text-green-500">Sin deuda activa</span>'}
                     </td>
                     <td class="table-cell">
                         <div class="flex items-center gap-4">
@@ -974,8 +989,14 @@
             if (prestamo.saldo <= 0.01) {
                 prestamo.saldo = 0;
                 prestamo.status = 'Pagado';
+                // NEW: Add the date it was paid if it doesn't exist
+                if (!prestamo.fechaPagado) {
+                     prestamo.fechaPagado = todayISO();
+                }
             } else {
                 prestamo.status = 'Activo';
+                // NEW: Remove the paid date if it becomes active again
+                delete prestamo.fechaPagado;
             }
         }
 
