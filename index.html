@@ -281,23 +281,39 @@
             const profileData = getActiveProfileData();
             const groupedData = {};
 
+            // Initialize data structure for all months with activity
+            const allDates = [
+                ...profileData.prestamos.map(p => p.fecha),
+                ...profileData.prestamos.flatMap(p => p.pagos.map(pago => pago.fecha)),
+                ...profileData.transacciones.map(t => t.fecha)
+            ];
+            const allMonths = [...new Set(allDates.map(date => date.substring(0, 7)))];
+
+            allMonths.forEach(month => {
+                groupedData[month] = { vendido: 0, recaudado: 0, ingresosCapital: 0, gastos: 0, gananciaInteres: 0 };
+            });
+
             profileData.prestamos.forEach(p => {
                 const month = p.fecha.substring(0, 7);
-                if (!groupedData[month]) groupedData[month] = { vendido: 0, recaudado: 0, ingresosCapital: 0, gastos: 0 };
-                groupedData[month].vendido += p.monto;
+                if (groupedData[month]) {
+                    groupedData[month].vendido += p.monto;
+                    groupedData[month].gananciaInteres += (p.montoTotal - p.monto);
+                }
             });
             profileData.prestamos.flatMap(p => p.pagos).forEach(pago => {
                 const month = pago.fecha.substring(0, 7);
-                if (!groupedData[month]) groupedData[month] = { vendido: 0, recaudado: 0, ingresosCapital: 0, gastos: 0 };
-                groupedData[month].recaudado += pago.monto;
+                if (groupedData[month]) {
+                    groupedData[month].recaudado += pago.monto;
+                }
             });
             profileData.transacciones.forEach(t => {
                 const month = t.fecha.substring(0, 7);
-                if (!groupedData[month]) groupedData[month] = { vendido: 0, recaudado: 0, ingresosCapital: 0, gastos: 0 };
-                if (t.tipo === 'ingreso') {
-                    groupedData[month].ingresosCapital += t.monto;
-                } else if (t.tipo === 'gasto') {
-                    groupedData[month].gastos += t.monto;
+                if (groupedData[month]) {
+                    if (t.tipo === 'ingreso') {
+                        groupedData[month].ingresosCapital += t.monto;
+                    } else if (t.tipo === 'gasto') {
+                        groupedData[month].gastos += t.monto;
+                    }
                 }
             });
 
@@ -307,15 +323,19 @@
                 const data = groupedData[month];
                 const monthDate = new Date(month + '-02');
                 const monthName = monthDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+                const gananciaTotal = data.gananciaInteres + data.ingresosCapital;
+                const gananciaNeta = gananciaTotal - data.gastos;
 
                 return `
                     <div class="card mb-6">
                         <h3 class="text-xl font-bold p-4 border-b dark:border-slate-700">${monthName}</h3>
-                        <div class="p-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
                             <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><h3 class="text-slate-500 dark:text-slate-400 text-sm">Total Vendido</h3><p class="text-2xl font-bold text-blue-600 dark:text-blue-400">${formatCurrency(data.vendido)}</p></div>
                             <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><h3 class="text-slate-500 dark:text-slate-400 text-sm">Total Recaudado</h3><p class="text-2xl font-bold text-green-600">${formatCurrency(data.recaudado)}</p></div>
                             <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><h3 class="text-slate-500 dark:text-slate-400 text-sm">Ingresos (Capital)</h3><p class="text-2xl font-bold text-green-500">${formatCurrency(data.ingresosCapital)}</p></div>
                             <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><h3 class="text-slate-500 dark:text-slate-400 text-sm">Gastos Operativos</h3><p class="text-2xl font-bold text-red-500">${formatCurrency(data.gastos)}</p></div>
+                            <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><h3 class="text-slate-500 dark:text-slate-400 text-sm">Ganancia Total</h3><p class="text-2xl font-bold text-cyan-500">${formatCurrency(gananciaTotal)}</p></div>
+                            <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><h3 class="text-slate-500 dark:text-slate-400 text-sm">Ganancia Neta</h3><p class="text-2xl font-bold ${gananciaNeta >= 0 ? 'text-teal-500' : 'text-orange-500'}">${formatCurrency(gananciaNeta)}</p></div>
                         </div>
                     </div>`;
             }).join('');
