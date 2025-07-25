@@ -590,7 +590,10 @@
                 const monthDate = new Date(month + '-02'); // Use day 2 to avoid timezone issues
                 const monthName = monthDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
                 
-                let tableRows = groupedByMonth[month].map(t => `
+                // Sort transactions within the month from newest to oldest
+                const sortedTransactions = groupedByMonth[month].sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+
+                let tableRows = sortedTransactions.map(t => `
                     <tr class="${type === 'ingreso' ? 'bg-green-50 dark:bg-green-900/50' : 'bg-red-50 dark:bg-red-900/50'}">
                         <td class="table-cell">${t.fecha}</td>
                         <td class="table-cell">${t.descripcion}</td>
@@ -825,17 +828,43 @@
                 const recaudoHoy = profileData.prestamos.flatMap(p => p.pagos).filter(pago => pago.fecha === fecha).reduce((sum, pago) => sum + pago.monto, 0);
                 const efectivoCalculado = (saldoInicial + recaudoHoy + ingresosHoy) - (ventasHoy + gastosHoy);
 
-                // Cálculos de Clientes y Cobranza
-                const clientesActivosHoy = new Set(profileData.prestamos.filter(p => p.status === 'Activo' || p.fechaPagado === fecha).map(p => p.clienteId)).size;
-                const clientesNuevosHoy = profileData.clientes.filter(c => c.fechaCreacion === fecha).length;
-                const clientesFinalizadosHoy = new Set(profileData.prestamos.filter(p => p.fechaPagado === fecha).map(p => p.clienteId)).size;
-
-                const clientesQuePagaronHoy = new Set(profileData.prestamos.flatMap(p => p.pagos).filter(pago => pago.fecha === fecha).map(pago => {
-                    const prestamo = profileData.prestamos.find(pr => pr.pagos.some(pa => pa.id === pago.id));
-                    return prestamo ? prestamo.clienteId : null;
-                })).size;
+                // Cálculos de Clientes y Cobranza (Lógica Corregida)
+                const clientesActivosIds = new Set();
+                profileData.prestamos.forEach(p => {
+                    const totalPagadoHastaAyer = p.pagos.filter(pago => pago.fecha < fecha).reduce((sum, pago) => sum + pago.monto, 0);
+                    const saldoAyer = p.montoTotal - totalPagadoHastaAyer;
+                    if (p.fecha <= fecha && saldoAyer > 0.01) {
+                         clientesActivosIds.add(p.clienteId);
+                    }
+                });
+                const clientesActivosHoy = clientesActivosIds.size;
                 
-                const recaudoEsperado = profileData.prestamos.filter(p => p.status === 'Activo' || p.fechaPagado === fecha).reduce((sum, p) => sum + p.cuotaDiaria, 0);
+                const clientesNuevosHoy = profileData.clientes.filter(c => c.fechaCreacion === fecha).length;
+                
+                const clientesFinalizadosHoy = new Set(
+                    profileData.prestamos.filter(p => {
+                        const totalPagadoHastaAyer = p.pagos.filter(pago => pago.fecha < fecha).reduce((sum, pago) => sum + pago.monto, 0);
+                        const saldoAyer = p.montoTotal - totalPagadoHastaAyer;
+                        const totalPagadoHoy = p.pagos.filter(pago => pago.fecha <= fecha).reduce((sum, pago) => sum + pago.monto, 0);
+                        const saldoHoy = p.montoTotal - totalPagadoHoy;
+                        return saldoAyer > 0.01 && saldoHoy <= 0.01;
+                    }).map(p => p.clienteId)
+                ).size;
+
+                const clientesQuePagaronHoy = new Set(
+                    profileData.prestamos
+                    .filter(p => p.pagos.some(pago => pago.fecha === fecha))
+                    .map(p => p.clienteId)
+                ).size;
+                
+                const recaudoEsperado = profileData.prestamos
+                    .filter(p => {
+                        const totalPagadoHastaAyer = p.pagos.filter(pago => pago.fecha < fecha).reduce((sum, pago) => sum + pago.monto, 0);
+                        const saldoAyer = p.montoTotal - totalPagadoHastaAyer;
+                        return p.fecha <= fecha && saldoAyer > 0.01;
+                    })
+                    .reduce((sum, p) => sum + p.cuotaDiaria, 0);
+
                 const porcentajeRecaudo = recaudoEsperado > 0 ? ((recaudoHoy / recaudoEsperado) * 100).toFixed(0) : 0;
                 const noPagaron = clientesActivosHoy - clientesQuePagaronHoy;
 
@@ -864,7 +893,7 @@
                                 <div class="flex justify-between p-2"><span class="font-medium">Recaudo Esperado:</span><span>${formatCurrency(recaudoEsperado)}</span></div>
                                 <div class="flex justify-between p-2"><span class="font-medium">Porcentaje Recaudado:</span><span>${porcentajeRecaudo}%</span></div>
                                 <div class="flex justify-between p-2"><span class="font-medium">Pagaron / Total:</span><span>${clientesQuePagaronHoy} / ${clientesActivosHoy}</span></div>
-                                <div class="flex justify-between p-2"><span class="font-medium text-red-500">No Pagaron:</span><span class="text-red-500">${noPagaron}</span></div>
+                                <div class="flex justify-between p-2"><span class="font-medium text-red-500">No Pagaron:</span><span class="text-red-500">${noPagaron < 0 ? 0 : noPagaron}</span></div>
                              </div>
                         </div>
                     </div>
@@ -1015,19 +1044,17 @@
             updateApp(); 
         }
         
-        function recalculateSaldo(prestamo) {
+        function recalculateSaldo(prestamo, paymentDate = todayISO()) {
             const totalPagado = prestamo.pagos.reduce((sum, p) => sum + p.monto, 0);
             prestamo.saldo = prestamo.montoTotal - totalPagado;
             if (prestamo.saldo <= 0.01) {
                 prestamo.saldo = 0;
                 prestamo.status = 'Pagado';
-                // NEW: Add the date it was paid if it doesn't exist
                 if (!prestamo.fechaPagado) {
-                     prestamo.fechaPagado = todayISO();
+                     prestamo.fechaPagado = paymentDate;
                 }
             } else {
                 prestamo.status = 'Activo';
-                // NEW: Remove the paid date if it becomes active again
                 delete prestamo.fechaPagado;
             }
         }
@@ -1037,7 +1064,7 @@
             const prestamo = profileData.prestamos.find(p => p.id === prestamoId); 
             if (!prestamo || monto <= 0) return; 
             prestamo.pagos.push({ id: crypto.randomUUID(), fecha, monto }); 
-            recalculateSaldo(prestamo);
+            recalculateSaldo(prestamo, fecha);
             updateApp(); 
         }
 
@@ -1058,7 +1085,7 @@
             if (pagoIndex > -1) {
                 prestamo.pagos[pagoIndex].monto = newMonto;
                 prestamo.pagos[pagoIndex].fecha = newFecha;
-                recalculateSaldo(prestamo);
+                recalculateSaldo(prestamo, newFecha);
                 updateApp();
             }
         }
@@ -1069,7 +1096,8 @@
                 const prestamo = profileData.prestamos.find(p => p.id === prestamoId);
                 if (prestamo) {
                     prestamo.pagos = prestamo.pagos.filter(p => p.id !== pagoId);
-                    recalculateSaldo(prestamo);
+                    const lastPaymentDate = prestamo.pagos.length > 0 ? prestamo.pagos.sort((a,b) => new Date(b.fecha) - new Date(a.fecha))[0].fecha : prestamo.fecha;
+                    recalculateSaldo(prestamo, lastPaymentDate);
                     updateApp();
                 }
             });
